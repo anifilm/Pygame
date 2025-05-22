@@ -1,13 +1,17 @@
 from settings import *
 from random import choice
 from timer import Timer
+import math
 
 class Game:
-    def __init__(self):
+    def __init__(self, get_next_shape):
         self.surface = pygame.Surface((GAME_WIDTH, GAME_HEIGHT))
         self.display_surface = pygame.display.get_surface()
         self.rect = self.surface.get_rect(topleft=(PADDING, PADDING))
         self.sprites = pygame.sprite.Group()
+
+        # game connection
+        self.get_next_shape = get_next_shape
 
         # lines
         self.line_surface = self.surface.copy()
@@ -17,8 +21,7 @@ class Game:
 
         # tetromino
         self.field_data = [[0 for x in range(COLUMNS)] for y in range(ROWS)]
-        #self.tetromino = Tetromino(choice(list(TETROMINOS.keys())), self.sprites, self.create_new_tetromino, self.field_data)
-        self.tetromino = Tetromino('I', self.sprites, self.create_new_tetromino, self.field_data)
+        self.tetromino = Tetromino(choice(list(TETROMINOS.keys())), self.sprites, self.create_new_tetromino, self.field_data)
 
         # timer
         self.timers = {
@@ -30,7 +33,7 @@ class Game:
 
     def create_new_tetromino(self):
         self.check_finished_rows()
-        self.tetromino = Tetromino(choice(list(TETROMINOS.keys())), self.sprites, self.create_new_tetromino, self.field_data)
+        self.tetromino = Tetromino(self.get_next_shape(), self.sprites, self.create_new_tetromino, self.field_data)
 
     def timer_update(self):
         for timer in self.timers.values():
@@ -62,14 +65,14 @@ class Game:
             if keys[pygame.K_s] or keys[pygame.K_DOWN]:
                 self.tetromino.move_down()
                 self.timers['horizontal move'].activate()
+            if keys[pygame.K_SPACE]:
+                self.tetromino.move_drop()
+                self.timers['horizontal move'].activate()
 
         if not self.timers['rotate'].active:
             if keys[pygame.K_w] or keys[pygame.K_UP]:
                 self.tetromino.rotate()
                 self.timers['rotate'].activate()
-
-        #if keys[pygame.K_SPACE]:
-        #    self.tetromino.move_drop()
 
     def check_finished_rows(self):
         # get the full row indexs
@@ -145,15 +148,32 @@ class Tetromino:
                 self.field_data[int(block.pos.y)][int(block.pos.x)] = block
             self.create_new_tetromino()
 
+    def move_drop(self):
+        while not self.next_move_vertical_collide(self.blocks, 1):
+            for block in self.blocks:
+                block.pos.y += 1
+        else:
+            for block in self.blocks:
+                self.field_data[int(block.pos.y)][int(block.pos.x)] = block
+            self.create_new_tetromino()
+
     # rotation
     def rotate(self, clockwise=True):
         if self.shape == 'O':
-            return  # O piece doesn't rotate
+            return
 
         # 1. pivot point
         if (self.shape == 'I'):
-            pivot_pos = self.blocks[1].pos
+            if self.rotation_state % 2 == 0:  # Horizontal (0 or 2)
+                pivot_pos = pygame.Vector2(
+                    (self.blocks[1].pos.x + self.blocks[2].pos.x) / 2,
+                    self.blocks[1].pos.y)
+            else:  # Vertical (1 or 3)
+                pivot_pos = pygame.Vector2(
+                    self.blocks[1].pos.x,
+                    (self.blocks[1].pos.y + self.blocks[2].pos.y) / 2)
         else:
+            # For other pieces, pivot is on the center block
             pivot_pos = self.blocks[2].pos
 
         # 2. Calculate new rotation state
@@ -174,7 +194,22 @@ class Tetromino:
             test_positions = []
             for block in self.blocks:
                 # First rotate
-                rotated_pos = pivot_pos + (block.pos - pivot_pos).rotate(-90 if clockwise else 90)
+                rotated_pos = block.rotate(pivot_pos, clockwise)
+
+                if (self.shape == 'I'): # fixed 'I' tetromino offset
+                    if self.rotation_state == 0:
+                        rotated_pos.x = math.ceil(rotated_pos.x)
+                        rotated_pos.y = math.floor(rotated_pos.y)
+                    elif self.rotation_state == 1:
+                        rotated_pos.x = math.floor(rotated_pos.x)
+                        rotated_pos.y = math.floor(rotated_pos.y)
+                    elif self.rotation_state == 2:
+                        rotated_pos.x = math.floor(rotated_pos.x)
+                        rotated_pos.y = math.ceil(rotated_pos.y)
+                    elif self.rotation_state == 3:
+                        rotated_pos.x = math.ceil(rotated_pos.x)
+                        rotated_pos.y = math.ceil(rotated_pos.y)
+
                 # Then apply kick offset
                 kicked_pos = pygame.Vector2(rotated_pos.x + kick_offset[0], rotated_pos.y + kick_offset[1])
                 test_positions.append(kicked_pos)
@@ -213,8 +248,8 @@ class Block(pygame.sprite.Sprite):
         self.pos = pygame.Vector2(pos) + BLOCK_OFFSET
         self.rect = self.image.get_rect(topleft=(self.pos * CELL_SIZE))
 
-    def rotate(self, pivot_pos):
-        return pivot_pos + (self.pos - pivot_pos).rotate(-90)
+    def rotate(self, pivot_pos, clockwise):
+        return pivot_pos + (self.pos - pivot_pos).rotate(-90 if clockwise else 90)
 
     def horizontal_collide(self, x, field_data):
         if not 0 <= x < COLUMNS:
