@@ -16,11 +16,21 @@ class Game:
         self.line_surface.set_alpha(120)
 
         # tetromino
-        self.tetromino = Tetromino(choice(list(TETROMINOS.keys())), self.sprites)
+        self.field_data = [[0 for x in range(COLUMNS)] for y in range(ROWS)]
+        #self.tetromino = Tetromino(choice(list(TETROMINOS.keys())), self.sprites, self.create_new_tetromino, self.field_data)
+        self.tetromino = Tetromino('I', self.sprites, self.create_new_tetromino, self.field_data)
 
         # timer
-        self.timers = { 'vertical move': Timer(UPDATE_START_SPEED, True, self.move_down) }
+        self.timers = {
+            'vertical move': Timer(UPDATE_START_SPEED, True, self.move_down),
+            'horizontal move': Timer(MOVE_WAIT_TIME),
+            'rotate': Timer(ROTATE_WAIT_TIME),
+        }
         self.timers['vertical move'].activate()
+
+    def create_new_tetromino(self):
+        self.check_finished_rows()
+        self.tetromino = Tetromino(choice(list(TETROMINOS.keys())), self.sprites, self.create_new_tetromino, self.field_data)
 
     def timer_update(self):
         for timer in self.timers.values():
@@ -40,8 +50,52 @@ class Game:
 
         self.surface.blit(self.line_surface, (0, 0))
 
+    def input(self):
+        keys = pygame.key.get_pressed()
+        if not self.timers['horizontal move'].active:
+            if keys[pygame.K_a] or keys[pygame.K_LEFT]:
+                self.tetromino.move_horizontal(-1)
+                self.timers['horizontal move'].activate()
+            if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
+                self.tetromino.move_horizontal(1)
+                self.timers['horizontal move'].activate()
+            if keys[pygame.K_s] or keys[pygame.K_DOWN]:
+                self.tetromino.move_down()
+                self.timers['horizontal move'].activate()
+
+        if not self.timers['rotate'].active:
+            if keys[pygame.K_w] or keys[pygame.K_UP]:
+                self.tetromino.rotate()
+                self.timers['rotate'].activate()
+
+        #if keys[pygame.K_SPACE]:
+        #    self.tetromino.move_drop()
+
+    def check_finished_rows(self):
+        # get the full row indexs
+        delete_rows = []
+        for i, row in enumerate(self.field_data):
+            if all(row):
+                delete_rows.append(i)
+
+        if delete_rows:
+            for delete_row in delete_rows:
+                # delete full rows
+                for block in self.field_data[delete_row]:
+                    block.kill()
+                # move down blocks
+                for row in self.field_data:
+                    for block in row:
+                        if block and block.pos.y < delete_row:
+                            block.pos.y += 1
+            # rebuild the field data
+            self.field_data = [[0 for x in range(COLUMNS)] for y in range(ROWS)]
+            for block in self.sprites:
+                self.field_data[int(block.pos.y)][int(block.pos.x)] = block
+
     def run(self):
         # update
+        self.input()
         self.timer_update()
         self.sprites.update()
 
@@ -55,17 +109,99 @@ class Game:
 
 
 class Tetromino:
-    def __init__(self, shape, group):
+    def __init__(self, shape, group, create_new_tetromino, field_data):
         # setup
+        self.shape = shape
         self.block_positions = TETROMINOS[shape]['shape']
         self.color = TETROMINOS[shape]['color']
+        self.create_new_tetromino = create_new_tetromino
+        self.field_data = field_data
+        # rotation state (0-3, representing 0, 90, 180, 270 degrees)
+        self.rotation_state = 0
         # create blocks
         self.blocks = [Block(group, pos, self.color) for pos in self.block_positions]
 
-    def move_down(self):
-        for block in self.blocks:
-            block.pos.y += 1
+    # collisions
+    def next_move_horizontal_collide(self, blocks, amount):
+        collision_list = [block.horizontal_collide(int(block.pos.x + amount), self.field_data) for block in blocks]
+        return True if any(collision_list) else False
 
+    def next_move_vertical_collide(self, blocks, amount):
+        collision_list = [block.vertical_collide(int(block.pos.y + amount), self.field_data) for block in blocks]
+        return True if any(collision_list) else False
+
+    # movement
+    def move_horizontal(self, amount):
+        if not self.next_move_horizontal_collide(self.blocks, amount):
+            for block in self.blocks:
+                block.pos.x += amount
+
+    def move_down(self):
+        if not self.next_move_vertical_collide(self.blocks, 1):
+            for block in self.blocks:
+                block.pos.y += 1
+        else:
+            for block in self.blocks:
+                self.field_data[int(block.pos.y)][int(block.pos.x)] = block
+            self.create_new_tetromino()
+
+    # rotation
+    def rotate(self, clockwise=True):
+        if self.shape == 'O':
+            return  # O piece doesn't rotate
+
+        # 1. pivot point
+        if (self.shape == 'I'):
+            pivot_pos = self.blocks[1].pos
+        else:
+            pivot_pos = self.blocks[2].pos
+
+        # 2. Calculate new rotation state
+        old_rotation_state = self.rotation_state
+        if clockwise:
+            new_rotation_state = (self.rotation_state + 1) % 4
+        else:
+            new_rotation_state = (self.rotation_state - 1) % 4
+
+        # 3. Get wall kick data based on shape and rotation
+        kick_type = 'JLSTZ' if self.shape in 'JLSTZ' else 'I'
+        kick_key = f'{old_rotation_state}>>{new_rotation_state}'
+        wall_kicks = WALL_KICK_DATA[kick_type][kick_key]
+
+        # 4. Try each kick offset until one works
+        for kick_offset in wall_kicks:
+            # Calculate new positions with the current kick offset
+            test_positions = []
+            for block in self.blocks:
+                # First rotate
+                rotated_pos = pivot_pos + (block.pos - pivot_pos).rotate(-90 if clockwise else 90)
+                # Then apply kick offset
+                kicked_pos = pygame.Vector2(rotated_pos.x + kick_offset[0], rotated_pos.y + kick_offset[1])
+                test_positions.append(kicked_pos)
+
+            # Check if these positions are valid
+            valid_positions = True
+            for pos in test_positions:
+                # Check boundaries
+                if pos.x < 0 or pos.x >= COLUMNS or pos.y >= ROWS:
+                    valid_positions = False
+                    break
+                # Check collision with existing blocks (only if position is within field)
+                if pos.y >= 0 and self.field_data[int(pos.y)][int(pos.x)]:
+                    valid_positions = False
+                    break
+
+            # If valid, apply the rotation and kick
+            if valid_positions:
+                # Update rotation state
+                self.rotation_state = new_rotation_state
+                # Apply new positions
+                for i, block in enumerate(self.blocks):
+                    block.pos = test_positions[i]
+                return True  # Rotation successful
+
+        # If we get here, no valid kick was found
+        return False
 
 class Block(pygame.sprite.Sprite):
     def __init__(self, group, pos, color):
@@ -75,9 +211,24 @@ class Block(pygame.sprite.Sprite):
         self.image.fill(color)
         # position
         self.pos = pygame.Vector2(pos) + BLOCK_OFFSET
-        x = self.pos.x * CELL_SIZE
-        y = self.pos.y * CELL_SIZE
-        self.rect = self.image.get_rect(topleft=(x, y))
+        self.rect = self.image.get_rect(topleft=(self.pos * CELL_SIZE))
+
+    def rotate(self, pivot_pos):
+        return pivot_pos + (self.pos - pivot_pos).rotate(-90)
+
+    def horizontal_collide(self, x, field_data):
+        if not 0 <= x < COLUMNS:
+            return True
+
+        if field_data[int(self.pos.y)][x]:
+            return True
+
+    def vertical_collide(self, y, field_data):
+        if y >= ROWS:
+            return True
+
+        if y >= 0 and field_data[y][int(self.pos.x)]:
+            return True
 
     def update(self):
         self.rect.topleft = self.pos * CELL_SIZE

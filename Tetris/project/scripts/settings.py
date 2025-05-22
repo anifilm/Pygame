@@ -17,10 +17,10 @@ WINDOW_WIDTH = GAME_WIDTH + SIDEBAR_WIDTH + PADDING * 3
 WINDOW_HEIGHT = GAME_HEIGHT + PADDING * 2
 
 # game behaviour
-UPDATE_START_SPEED = 800
+UPDATE_START_SPEED = 1200 # default 800
 MOVE_WAIT_TIME = 200
 ROTATE_WAIT_TIME = 200
-BLOCK_OFFSET = pygame.Vector2(COLUMNS // 2, -1)
+BLOCK_OFFSET = pygame.Vector2(COLUMNS // 2, -1) # default (COLUMNS // 2, -1)
 
 # Colors
 YELLOW = '#f1e60d'
@@ -35,13 +35,42 @@ LINE_COLOR = '#FFFFFF'
 
 # shapes
 TETROMINOS = {
-	'T': {'shape': [(0,0), (-1,0), (1,0), (0,-1)], 'color': PURPLE},
-	'O': {'shape': [(0,0), (0,-1), (1,0), (1,-1)], 'color': YELLOW},
-	'J': {'shape': [(0,0), (0,-1), (0,1), (-1,1)], 'color': BLUE},
-	'L': {'shape': [(0,0), (0,-1), (0,1), (1,1)], 'color': ORANGE},
-	'I': {'shape': [(0,0), (0,-1), (0,-2), (0,1)], 'color': CYAN},
-	'S': {'shape': [(0,0), (-1,0), (0,-1), (1,-1)], 'color': GREEN},
-	'Z': {'shape': [(0,0), (1,0), (0,-1), (-1,-1)], 'color': RED}
+	'I': {'shape': [(-1,1), (0,1), (1,1), (2,1)], 'color': CYAN},
+	'J': {'shape': [(-1,1), (-1,0), (0,0), (1,0)], 'color': BLUE},
+	'L': {'shape': [(1,1), (-1,0), (0,0), (1,0)], 'color': ORANGE},
+	'O': {'shape': [(0,1), (1,1), (0,0), (1,0)], 'color': YELLOW},
+	'S': {'shape': [(0,1), (1,1), (-1,0), (0,0)], 'color': GREEN},
+	'T': {'shape': [(0,1), (-1,0), (0,0), (1,0)], 'color': PURPLE},
+	'Z': {'shape': [(-1,1), (0,1), (0,0), (1,0)], 'color': RED}
 }
 
 SCORE_DATA = {1: 40, 2: 100, 3: 300, 4: 1200}
+
+# Wall kick data (SRS)
+# Format: [test 1, test 2, test 3, test 4, test 5]
+# Each test is (x, y) offset to try
+# First value is for clockwise rotation, second is for counter-clockwise
+WALL_KICK_DATA = {
+    'JLSTZ': {
+        '0>>1': [(0, 0), (-1, 0), (-1, -1), (0, 2), (-1, 2)],
+        '1>>2': [(0, 0), (1, 0), (1, 1), (0, -2), (1, -2)],
+        '2>>3': [(0, 0), (1, 0), (1, -1), (0, 2), (1, 2)],
+        '3>>0': [(0, 0), (-1, 0), (-1, 1), (0, -2), (-1, -2)],
+        # Counter-clockwise
+        '0>>3': [(0, 0), (1, 0), (1, -1), (0, 2), (1, 2)],
+        '1>>0': [(0, 0), (1, 0), (1, 1), (0, -2), (1, -2)],
+        '2>>1': [(0, 0), (-1, 0), (-1, -1), (0, 2), (-1, 2)],
+        '3>>2': [(0, 0), (-1, 0), (-1, 1), (0, -2), (-1, -2)]
+    },
+    'I': {
+        '0>>1': [(0, 0), (-2, 0), (1, 0), (-2, 1), (1, -2)],
+        '1>>2': [(0, 0), (-1, 0), (2, 0), (-1, -2), (2, 1)],
+        '2>>3': [(0, 0), (2, 0), (-1, 0), (2, -1), (-1, 2)],
+        '3>>0': [(0, 0), (1, 0), (-2, 0), (1, 2), (-2, -1)],
+        # Counter-clockwise
+        '0>>3': [(0, 0), (-1, 0), (2, 0), (-1, -2), (2, 1)],
+        '1>>0': [(0, 0), (2, 0), (-1, 0), (2, -1), (-1, 2)],
+        '2>>1': [(0, 0), (1, 0), (-2, 0), (1, 2), (-2, -1)],
+        '3>>2': [(0, 0), (-2, 0), (1, 0), (-2, 1), (1, -2)]
+    }
+}
