@@ -4,7 +4,7 @@ from timer import Timer
 import math
 
 class Game:
-    def __init__(self, get_next_shape):
+    def __init__(self, get_next_shape, update_score):
         self.surface = pygame.Surface((GAME_WIDTH, GAME_HEIGHT))
         self.display_surface = pygame.display.get_surface()
         self.rect = self.surface.get_rect(topleft=(PADDING, PADDING))
@@ -12,6 +12,7 @@ class Game:
 
         # game connection
         self.get_next_shape = get_next_shape
+        self.update_score = update_score
 
         # lines
         self.line_surface = self.surface.copy()
@@ -24,12 +25,30 @@ class Game:
         self.tetromino = Tetromino(choice(list(TETROMINOS.keys())), self.sprites, self.create_new_tetromino, self.field_data)
 
         # timer
+        self.down_speed = UPDATE_START_SPEED
         self.timers = {
             'vertical move': Timer(UPDATE_START_SPEED, True, self.move_down),
             'horizontal move': Timer(MOVE_WAIT_TIME),
             'rotate': Timer(ROTATE_WAIT_TIME),
+            'drop': Timer(DROP_WAIT_TIME),
         }
         self.timers['vertical move'].activate()
+
+        # score
+        self.current_level = 1
+        self.current_lines = 0
+        self.current_score = 0
+
+    def calculate_score(self, num_lines):
+        self.current_lines += num_lines
+        self.current_score += SCORE_DATA[num_lines] * self.current_level
+
+        if self.current_lines / 10 > self.current_level:
+            self.current_level += 1
+            self.down_speed *= 0.75
+            self.timers['vertical move'].duration = self.down_speed
+
+        self.update_score(self.current_level, self.current_lines, self.current_score)
 
     def create_new_tetromino(self):
         self.check_finished_rows()
@@ -65,14 +84,16 @@ class Game:
             if keys[pygame.K_s] or keys[pygame.K_DOWN]:
                 self.tetromino.move_down()
                 self.timers['horizontal move'].activate()
-            if keys[pygame.K_SPACE]:
-                self.tetromino.move_drop()
-                self.timers['horizontal move'].activate()
 
         if not self.timers['rotate'].active:
             if keys[pygame.K_w] or keys[pygame.K_UP]:
                 self.tetromino.rotate()
                 self.timers['rotate'].activate()
+
+        if not self.timers['drop'].active:
+            if keys[pygame.K_SPACE]:
+                self.tetromino.move_drop()
+                self.timers['drop'].activate()
 
     def check_finished_rows(self):
         # get the full row indexs
@@ -95,6 +116,9 @@ class Game:
             self.field_data = [[0 for x in range(COLUMNS)] for y in range(ROWS)]
             for block in self.sprites:
                 self.field_data[int(block.pos.y)][int(block.pos.x)] = block
+
+            # update score
+            self.calculate_score(len(delete_rows))
 
     def run(self):
         # update
