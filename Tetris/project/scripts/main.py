@@ -16,20 +16,20 @@ class Main:
 		self.clock = pygame.time.Clock()
 		pygame.display.set_caption('Tetris')
 
-		# shapes
-		self.next_shapes = [choice(list(TETROMINOS.keys())) for _ in range(3)]
-
-		# components
-		self.game = Game(self.get_next_shape, self.update_score)
-		self.score = Score()
-		self.preview = Preview()
-
 		# sound setup
 		self.sound_dir = path.join('/Volumes/My Works/Pygame/Tetris/project', 'sound')
 		# background music
 		self.bg_music = pygame.mixer.Sound(path.join(self.sound_dir, 'music.wav'))
-		self.bg_music.set_volume(0.2)  # Set volume to 30%
+		self.bg_music.set_volume(0.2)  # Set volume to 20%
 		self.bg_music.play(loops=-1)  # Play on loop
+
+		# shapes
+		self.next_shapes = [choice(list(TETROMINOS.keys())) for _ in range(3)]
+
+		# components
+		self.preview = Preview()
+		self.score = Score()
+		self.game = Game(self.get_next_shape, self.update_score, self.bg_music)
 
 	def update_score(self, level, lines, score):
 		self.score.level = level
@@ -48,12 +48,16 @@ class Main:
 					pygame.quit()
 					exit()
 
+				# Handle game over events if game is over
+				if self.game.game_over:
+					self.game.handle_game_over_events(event)
+
 			# display
 			self.display_surface.fill(GRAY)
 
-			self.game.run()
-			self.score.run()
 			self.preview.run(self.next_shapes)
+			self.score.run()
+			self.game.run()
 
 			# updating the game
 			pygame.display.update()

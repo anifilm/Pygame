@@ -5,13 +5,23 @@ from os import path
 import math
 
 from timer import Timer
+from game_over import GameOverPopup
 
 class Game:
-    def __init__(self, get_next_shape, update_score):
+    def __init__(self, get_next_shape, update_score, bg_music):
+        # Background music
+        self.bg_music = bg_music
         self.surface = pygame.Surface((GAME_WIDTH, GAME_HEIGHT))
         self.display_surface = pygame.display.get_surface()
         self.rect = self.surface.get_rect(topleft=(PADDING, PADDING))
         self.sprites = pygame.sprite.Group()
+
+        # Game state
+        self.game_over = False
+        self.game_active = True
+
+        # Game over popup
+        self.game_over_popup = GameOverPopup(self.display_surface, self.bg_music, self.reset_game)
 
         # game connection
         self.get_next_shape = get_next_shape
@@ -62,12 +72,18 @@ class Game:
         self.update_score(self.current_level, self.current_lines, self.current_score)
 
     def check_game_over(self):
+        # Check if any blocks are above the playing field
         for block in self.tetromino.blocks:
             if block.pos.y < 0:
-                exit()
+                self.game_over = True
+                # Pause background music when game is over
+                self.bg_music.stop()
+                return True
+        return False
 
     def create_new_tetromino(self):
-        self.check_game_over()
+        if self.check_game_over():
+            return
         self.check_finished_rows()
         self.tetromino = Tetromino(self.get_next_shape(), self.sprites, self.create_new_tetromino, self.field_data, self.drop_sound)
 
@@ -138,19 +154,51 @@ class Game:
             # update score
             self.calculate_score(len(delete_rows))
 
+    def reset_game(self):
+        # Reset game state
+        self.game_over = False
+        self.game_active = True
+
+        # Clear field and sprites
+        self.field_data = [[0 for x in range(COLUMNS)] for y in range(ROWS)]
+        self.sprites.empty()
+
+        # Reset score
+        self.current_level = 1
+        self.current_lines = 0
+        self.current_score = 0
+        self.down_speed = UPDATE_START_SPEED
+        self.timers['vertical move'].duration = self.down_speed
+        self.update_score(self.current_level, self.current_lines, self.current_score)
+
+        # Restart background music
+        self.bg_music.play(loops=-1)
+
+        # Create new tetromino
+        self.tetromino = Tetromino(choice(list(TETROMINOS.keys())), self.sprites, self.create_new_tetromino, self.field_data, self.drop_sound)
+
+    def handle_game_over_events(self, event):
+        # Delegate event handling to the GameOverPopup class
+        self.game_over_popup.handle_events(event)
+
     def run(self):
+        # Always draw the game
         # update
-        self.input()
-        self.timer_update()
-        self.sprites.update()
+        if not self.game_over:
+            self.input()
+            self.timer_update()
+            self.sprites.update()
 
         # drawing
         self.surface.fill(GRAY)
         self.sprites.draw(self.surface)
-
         self.draw_grid()
         self.display_surface.blit(self.surface, (PADDING, PADDING))
         pygame.draw.rect(self.display_surface, LINE_COLOR, self.rect, 2, 2)
+
+        # Draw game over screen on top if game is over
+        if self.game_over:
+            self.game_over_popup.draw(self.current_score)
 
 
 class Tetromino:
