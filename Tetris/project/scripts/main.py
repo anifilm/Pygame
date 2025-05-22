@@ -1,12 +1,12 @@
 from settings import *
 from sys import exit
+from os import path
+from random import choice
 
 # components
 from game import Game
 from score import Score
 from preview import Preview
-
-from random import choice
 
 class Main:
 	def __init__(self):
@@ -24,15 +24,22 @@ class Main:
 		self.score = Score()
 		self.preview = Preview()
 
+		# sound setup
+		self.sound_dir = path.join('/Volumes/My Works/Pygame/Tetris/project', 'sound')
+		# background music
+		self.bg_music = pygame.mixer.Sound(path.join(self.sound_dir, 'music.wav'))
+		self.bg_music.set_volume(0.2)  # Set volume to 30%
+		self.bg_music.play(loops=-1)  # Play on loop
+
 	def update_score(self, level, lines, score):
 		self.score.level = level
 		self.score.lines = lines
 		self.score.score = score
 
 	def get_next_shape(self):
-		shape = self.next_shapes.pop(0)
+		next_shape = self.next_shapes.pop(0)
 		self.next_shapes.append(choice(list(TETROMINOS.keys())))
-		return shape
+		return next_shape
 
 	def run(self):
 		while True:

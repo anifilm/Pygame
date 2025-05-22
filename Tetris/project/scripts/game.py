@@ -1,7 +1,10 @@
 from settings import *
 from random import choice
-from timer import Timer
+from sys import exit
+from os import path
 import math
+
+from timer import Timer
 
 class Game:
     def __init__(self, get_next_shape, update_score):
@@ -20,9 +23,17 @@ class Game:
         self.line_surface.set_colorkey((0, 255, 0))
         self.line_surface.set_alpha(120)
 
+        # sound setup
+        self.sound_dir = path.join('/Volumes/My Works/Pygame/Tetris/project', 'sound')
+        # sfx sound
+        self.landing_sound = pygame.mixer.Sound(path.join(self.sound_dir, 'landing.wav'))
+        self.landing_sound.set_volume(0.5)  # Set volume to 50%
+        self.drop_sound = pygame.mixer.Sound(path.join(self.sound_dir, 'drop.mp3'))
+        self.drop_sound.set_volume(0.5)  # Set volume to 50%
+
         # tetromino
         self.field_data = [[0 for x in range(COLUMNS)] for y in range(ROWS)]
-        self.tetromino = Tetromino(choice(list(TETROMINOS.keys())), self.sprites, self.create_new_tetromino, self.field_data)
+        self.tetromino = Tetromino(choice(list(TETROMINOS.keys())), self.sprites, self.create_new_tetromino, self.field_data, self.drop_sound)
 
         # timer
         self.down_speed = UPDATE_START_SPEED
@@ -50,9 +61,15 @@ class Game:
 
         self.update_score(self.current_level, self.current_lines, self.current_score)
 
+    def check_game_over(self):
+        for block in self.tetromino.blocks:
+            if block.pos.y < 0:
+                exit()
+
     def create_new_tetromino(self):
+        self.check_game_over()
         self.check_finished_rows()
-        self.tetromino = Tetromino(self.get_next_shape(), self.sprites, self.create_new_tetromino, self.field_data)
+        self.tetromino = Tetromino(self.get_next_shape(), self.sprites, self.create_new_tetromino, self.field_data, self.drop_sound)
 
     def timer_update(self):
         for timer in self.timers.values():
@@ -117,6 +134,7 @@ class Game:
             for block in self.sprites:
                 self.field_data[int(block.pos.y)][int(block.pos.x)] = block
 
+            self.landing_sound.play()
             # update score
             self.calculate_score(len(delete_rows))
 
@@ -136,7 +154,9 @@ class Game:
 
 
 class Tetromino:
-    def __init__(self, shape, group, create_new_tetromino, field_data):
+    def __init__(self, shape, group, create_new_tetromino, field_data, drop_sound):
+        # sound
+        self.drop_sound = drop_sound
         # setup
         self.shape = shape
         self.block_positions = TETROMINOS[shape]['shape']
@@ -170,6 +190,8 @@ class Tetromino:
         else:
             for block in self.blocks:
                 self.field_data[int(block.pos.y)][int(block.pos.x)] = block
+
+            self.drop_sound.play()
             self.create_new_tetromino()
 
     def move_drop(self):
@@ -179,6 +201,8 @@ class Tetromino:
         else:
             for block in self.blocks:
                 self.field_data[int(block.pos.y)][int(block.pos.x)] = block
+
+            self.drop_sound.play()
             self.create_new_tetromino()
 
     # rotation
